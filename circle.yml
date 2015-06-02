@@ -1,0 +1,32 @@
+machine:
+  services:
+    - docker
+
+dependencies:
+  pre:
+    - echo "Host circle" >> ~/.ssh/config
+    - echo "  Port 22" >>  ~/.ssh/config
+    - echo "  User docker" >> ~/.ssh/config
+    - echo "  UserKnownHostsFile /dev/null" >>  ~/.ssh/config
+    - echo "  StrictHostKeyChecking no" >>  ~/.ssh/config
+    - echo "  PasswordAuthentication no" >>  ~/.ssh/config
+    - echo "  IdentityFile ~/.ssh/id_rsa" >>  ~/.ssh/config
+    - echo "  IdentitiesOnly yes" >>  ~/.ssh/config
+    - echo "  GSSAPIAuthentication no" >>  ~/.ssh/config
+    - echo "  LogLevel FATAL" >>  ~/.ssh/config
+    - ssh-keygen -N "" -t rsa -f ~/.ssh/id_rsa
+    - cp ~/.ssh/id_rsa.pub authorized_keys
+
+  override:
+    - docker info
+    - docker build -t nktn/dockerspec .
+    - sudo apt-get update; sudo apt-get install ansible
+    - gem install bundler
+    - bundle install
+
+test:
+  override:
+    - docker run -d --name docker nktn/dockerspec
+    - host=$(ruby -rjson -e 'puts JSON.parse(%x(docker inspect docker)).first["NetworkSettings"]["IPAddress"]'); echo '  HostName '$host >> ~/.ssh/config
+    - ansible-playbook /home/ubuntu/dockerspec/ansible/ci.yml -i /home/ubuntu/dockerspec/ansible/inventory_circleci
+    - bundle exec rake spec
